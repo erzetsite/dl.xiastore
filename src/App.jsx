@@ -498,7 +498,7 @@ export default function App() {
 
       {/* DONATE BUTTON */}
       <motion.a
-        href="https://sociabuzz.com/xiastore/tribe" 
+        href="https://coffee.xiastore.web.id/" 
         target="_blank"
         rel="noopener noreferrer"
         whileHover={{ scale: 1.05 }}
