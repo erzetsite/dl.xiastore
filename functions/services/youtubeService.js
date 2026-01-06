@@ -1,7 +1,7 @@
 import axios from "axios";
 
 async function fetchYouTubeData(url) {
-    console.log("[YT] Processing URL via Gimita:", url);
+    console.log("[YT] Processing URL via Gimita Multi-Res:", url);
 
     const BASE_URL = "https://api.gimita.id/api/downloader";
     const HEADERS = {
@@ -9,18 +9,12 @@ async function fetchYouTubeData(url) {
     };
 
     try {
-        // Request Video (720p) & Audio (192kbps) Paralel
-        const [videoRes, audioRes] = await Promise.allSettled([
-            axios.get(`${BASE_URL}/ytmp4`, { 
-                params: { url: url, resolution: 720 },
-                headers: HEADERS,
-                timeout: 20000 
-            }),
-            axios.get(`${BASE_URL}/ytmp3`, { 
-                params: { url: url, quality: 4 },
-                headers: HEADERS,
-                timeout: 20000 
-            })
+        // Request Semua Resolusi & Audio secara Paralel
+        const [res360, res720, res1080, resMp3] = await Promise.allSettled([
+            axios.get(`${BASE_URL}/ytmp4`, { params: { url, resolution: 360 }, headers: HEADERS, timeout: 15000 }),
+            axios.get(`${BASE_URL}/ytmp4`, { params: { url, resolution: 720 }, headers: HEADERS, timeout: 15000 }),
+            axios.get(`${BASE_URL}/ytmp4`, { params: { url, resolution: 1080 }, headers: HEADERS, timeout: 15000 }),
+            axios.get(`${BASE_URL}/ytmp3`, { params: { url, quality: 4 }, headers: HEADERS, timeout: 15000 })
         ]);
 
         let title = "YouTube Video";
@@ -28,61 +22,60 @@ async function fetchYouTubeData(url) {
         let author = "YouTube";
         const medias = [];
 
-        // --- 1. PROSES VIDEO ---
-        if (videoRes.status === 'fulfilled' && videoRes.value.data) {
-            const res = videoRes.value.data;
-            if (res.success && res.data) {
-                const vData = res.data;
+        // Helper untuk parse response video
+        const processVideo = (res) => {
+            if (res.status === 'fulfilled' && res.value.data && res.value.data.success) {
+                const data = res.value.data.data;
+                if (data.title && title === "YouTube Video") title = data.title;
+                if (data.thumbnail && thumbnail.includes("Youtube_logo")) thumbnail = data.thumbnail;
                 
-                if (vData.title) title = vData.title;
-                if (vData.thumbnail) thumbnail = vData.thumbnail;
-                
-                if (vData.download_url) {
+                if (data.download_url) {
                     medias.push({
-                        url: vData.download_url,
+                        url: data.download_url,
                         type: 'video',
-                        label: `DOWNLOAD VIDEO (${vData.quality || '720p'})`,
-                        extension: 'mp4'
+                        label: `VIDEO ${data.quality || 'HD'}`,
+                        extension: 'mp4',
+                        quality: data.quality // e.g. "720p"
                     });
                 }
             }
-        }
+        };
 
-        // --- 2. PROSES AUDIO ---
-        if (audioRes.status === 'fulfilled' && audioRes.value.data) {
-            const res = audioRes.value.data;
-            if (res.success && res.data) {
-                const aData = res.data;
-                
-                if (title === "YouTube Video" && aData.title) title = aData.title;
-                if (thumbnail.includes("Youtube_logo") && aData.thumbnail) thumbnail = aData.thumbnail;
+        processVideo(res1080);
+        processVideo(res720);
+        processVideo(res360);
 
-                if (aData.download_url) {
-                    medias.push({
-                        url: aData.download_url,
-                        type: 'audio',
-                        label: 'DOWNLOAD MP3',
-                        extension: 'mp3'
-                    });
-                }
+        // Process MP3
+        if (resMp3.status === 'fulfilled' && resMp3.value.data && resMp3.value.data.success) {
+            const data = resMp3.value.data.data;
+            if (data.download_url) {
+                medias.push({
+                    url: data.download_url,
+                    type: 'audio',
+                    label: 'AUDIO MP3',
+                    extension: 'mp3',
+                    quality: '192kbps'
+                });
             }
         }
 
         if (medias.length === 0) {
-            // Jika Gimita gagal, kita bisa kasih pesan yang lebih informatif atau lempar error
-            throw new Error("Gagal mendapatkan link download. API Gimita mungkin sedang limit.");
+            throw new Error("Gagal mendapatkan link download. Server sibuk.");
         }
+
+        // Hapus duplikat URL (kadang API kasih link sama untuk resolusi beda jika source terbatas)
+        const uniqueMedias = medias.filter((v, i, a) => a.findIndex(t => t.url === v.url) === i);
 
         return {
             title,
             thumbnail,
             author,
-            medias
+            medias: uniqueMedias
         };
 
     } catch (error) {
         console.error("[YT Service Error]:", error.message);
-        throw new Error(error.message || "Gagal mengambil data YouTube.");
+        throw new Error("Gagal mengambil data YouTube.");
     }
 }
 

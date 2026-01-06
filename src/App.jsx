@@ -382,37 +382,26 @@ export default function App() {
                     <h3 className="text-white font-bold text-lg mb-1 line-clamp-2 leading-snug">{result.title}</h3>
                     <p className="text-gray-400 text-xs flex items-center gap-1"><Activity size={10}/> By {result.author}</p>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    {primaryLink ? (
-                      <a 
-                        href={primaryLink} 
-                        target="_blank" 
-                        rel="noreferrer"
-                        className={`flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-bold transition-all border ${isAudioPlatform || !showAudioButton ? 'bg-blue-500/10 hover:bg-blue-500/20 border-blue-500/30 text-blue-400 col-span-2' : 'bg-blue-500/10 hover:bg-blue-500/20 border-blue-500/30 text-blue-400'}`}
-                      >
-                         {btnConfig.icon} {btnConfig.label}
-                      </a>
-                    ) : (
-                      <button disabled className={`flex items-center justify-center gap-2 bg-white/5 text-gray-500 py-3 rounded-xl text-xs font-bold cursor-not-allowed border border-white/5 ${isAudioPlatform || !showAudioButton ? 'col-span-2' : ''}`}>
-                        {btnConfig.icon} {btnConfig.noData}
-                      </button>
-                    )}
-
-                    {showAudioButton && (
-                      getDownloadLink('audio') ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {result.medias && result.medias.length > 0 ? (
+                      result.medias.map((item, index) => (
                         <a 
-                          href={getDownloadLink('audio')} 
+                          key={index}
+                          href={item.url} 
                           target="_blank" 
                           rel="noreferrer"
-                          className="flex items-center justify-center gap-2 bg-green-500/10 hover:bg-green-500/20 border-green-500/30 text-green-400 py-3 rounded-xl text-xs font-bold transition-all"
+                          className={`flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-bold transition-all border ${
+                            item.type === 'audio' 
+                              ? 'bg-green-500/10 hover:bg-green-500/20 border-green-500/30 text-green-400' 
+                              : 'bg-blue-500/10 hover:bg-blue-500/20 border-blue-500/30 text-blue-400'
+                          }`}
                         >
-                           <FileAudio size={14} /> DOWNLOAD MP3
+                           {item.type === 'audio' ? <FileAudio size={14} /> : <FileVideo size={14} />} 
+                           {item.label || (item.type === 'audio' ? 'DOWNLOAD MP3' : 'DOWNLOAD VIDEO')}
                         </a>
-                      ) : (
-                        <button disabled className="flex items-center justify-center gap-2 bg-white/5 text-gray-500 py-3 rounded-xl text-xs font-bold cursor-not-allowed border border-white/5">
-                          <FileAudio size={14} /> NO AUDIO
-                        </button>
-                      )
+                      ))
+                    ) : (
+                      <div className="col-span-2 text-center text-gray-500 text-xs py-2">No download links available</div>
                     )}
                   </div>
                 </div>
