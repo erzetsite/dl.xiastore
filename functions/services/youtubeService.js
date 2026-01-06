@@ -1,100 +1,129 @@
 import axios from "axios";
 
-// Helper function to try multiple APIs
-async function fetchWithFallback(url) {
-    const errors = [];
-    
-    // 1. Ryzendesu API (Primary)
-    try {
-        console.log("[YT] Trying Ryzendesu API...");
-        const videoRes = await axios.get(`https://api.ryzendesu.com/api/downloader/ytmp4?url=${encodeURIComponent(url)}`, { timeout: 10000 });
-        const audioRes = await axios.get(`https://api.ryzendesu.com/api/downloader/ytmp3?url=${encodeURIComponent(url)}`, { timeout: 10000 });
-        
-        if (videoRes.data && (videoRes.data.url || videoRes.data.data?.url)) {
-             const vData = videoRes.data.data || videoRes.data;
-             const aData = audioRes.data.data || audioRes.data || {};
-             
-             return {
-                 title: vData.title || "YouTube Video",
-                 thumbnail: vData.thumbnail || vData.thumb,
-                 author: vData.author || "YouTube",
-                 medias: [
-                     {
-                         url: vData.url,
-                         type: 'video',
-                         label: 'HD Video',
-                         extension: 'mp4'
-                     },
-                     {
-                         url: aData.url || aData.audio,
-                         type: 'audio',
-                         label: 'Audio MP3',
-                         extension: 'mp3'
-                     }
-                 ].filter(m => m.url) // Filter out empty URLs
-             };
-        }
-    } catch (e) {
-        console.error("[YT] Ryzendesu failed:", e.message);
-        errors.push(e.message);
-    }
+// List of Cobalt Instances (Prioritized)
+const COBALT_INSTANCES = [
+    "https://api.cobalt.tools",
+    "https://co.wuk.sh",
+    "https://cobalt.kwiatekmiki.pl",
+    "https://api.wkr.one"
+];
 
-    // 2. Siputzx API (Fallback)
+// Fallback APIs
+const FALLBACK_APIS = [
+    "https://api.davidcyriltech.my.id/youtube",
+    "https://api.vreden.web.id/api/ytmp4"
+];
+
+async function fetchCobalt(url, instanceUrl) {
     try {
-        console.log("[YT] Trying Siputzx API...");
-        const res = await axios.get(`https://api.siputzx.my.id/api/d/ytmp4?url=${encodeURIComponent(url)}`, { timeout: 10000 });
-        
-        if (res.data && res.data.data) {
-            const data = res.data.data;
+        const res = await axios.post(`${instanceUrl}/api/json`, {
+            url: url,
+            videoQuality: '1080',
+            audioFormat: 'mp3',
+            filenamePattern: 'basic'
+        }, {
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            },
+            timeout: 8000
+        });
+
+        const data = res.data;
+        if (data.status === 'stream' || data.status === 'redirect' || data.url) {
             return {
-                title: data.title,
-                thumbnail: data.thumbnail || data.cover,
+                title: data.filename || "YouTube Video",
+                thumbnail: "https://upload.wikimedia.org/wikipedia/commons/e/ef/Youtube_logo.png", // Cobalt doesn't always return thumb
                 author: "YouTube",
                 medias: [
                     {
-                        url: data.dl || data.url,
+                        url: data.url,
                         type: 'video',
-                        label: 'Video',
+                        label: 'HD Video',
                         extension: 'mp4'
                     }
                 ]
             };
-        }
-    } catch (e) {
-        console.error("[YT] Siputzx failed:", e.message);
-        errors.push(e.message);
-    }
-
-    // 3. Vreden API (Final Fallback)
-    try {
-         console.log("[YT] Trying Vreden API...");
-         const res = await axios.get(`https://api.vreden.web.id/api/ytmp4?url=${encodeURIComponent(url)}`, { timeout: 10000 });
-         if (res.data && res.data.result) {
-             const data = res.data.result;
+        } else if (data.status === 'picker') {
+             // Handle picker (multiple formats)
+             const medias = data.picker.map(p => ({
+                 url: p.url,
+                 type: p.type === 'video' ? 'video' : 'audio',
+                 label: p.type === 'video' ? 'Video' : 'Audio',
+                 extension: p.type === 'video' ? 'mp4' : 'mp3'
+             }));
              return {
-                 title: data.title,
-                 thumbnail: data.thumbnail,
+                 title: "YouTube Video",
+                 thumbnail: "https://upload.wikimedia.org/wikipedia/commons/e/ef/Youtube_logo.png",
                  author: "YouTube",
-                 medias: [
-                     {
-                         url: data.url || data.download?.url,
+                 medias: medias
+             };
+        }
+        throw new Error("Invalid Cobalt response");
+    } catch (e) {
+        throw new Error(`Cobalt (${instanceUrl}) failed: ${e.message}`);
+    }
+}
+
+async function fetchFallback(url, apiUrl) {
+     try {
+        const res = await axios.get(`${apiUrl}?url=${encodeURIComponent(url)}`, { timeout: 10000 });
+        const data = res.data;
+        
+        // Adaptasi response dari berbagai API
+        if (data.result) {
+            return {
+                title: data.result.title || "Video",
+                thumbnail: data.result.thumbnail || data.result.image,
+                author: "YouTube",
+                medias: [
+                    {
+                         url: data.result.mp4 || data.result.video || data.result.download?.url,
                          type: 'video',
                          label: 'Video',
                          extension: 'mp4'
-                     }
-                 ]
-             };
-         }
+                    },
+                    {
+                         url: data.result.mp3 || data.result.audio,
+                         type: 'audio',
+                         label: 'Audio',
+                         extension: 'mp3'
+                    }
+                ].filter(x => x.url)
+            };
+        }
+        throw new Error("Invalid Fallback Response");
     } catch (e) {
-        console.error("[YT] Vreden failed:", e.message);
-        errors.push(e.message);
+        throw e;
     }
-
-    throw new Error(`All YouTube APIs failed. Last error: ${errors[errors.length - 1]}`);
 }
 
 async function fetchYouTubeData(url) {
-    return await fetchWithFallback(url);
+    const errors = [];
+
+    // 1. Try Cobalt Instances
+    for (const instance of COBALT_INSTANCES) {
+        try {
+            console.log(`[YT] Trying Cobalt: ${instance}`);
+            return await fetchCobalt(url, instance);
+        } catch (e) {
+            console.error(e.message);
+            errors.push(e.message);
+        }
+    }
+
+    // 2. Try Fallback APIs
+    for (const api of FALLBACK_APIS) {
+        try {
+            console.log(`[YT] Trying Fallback: ${api}`);
+            return await fetchFallback(url, api);
+        } catch (e) {
+            console.error(`Fallback failed: ${e.message}`);
+            errors.push(e.message);
+        }
+    }
+
+    throw new Error("Semua server sibuk. Silakan coba lagi nanti.");
 }
 
 export { fetchYouTubeData };
