@@ -3,7 +3,6 @@ import axios from "axios";
 async function fetchYouTubeData(url) {
     console.log("[YT] Processing URL via Gimita:", url);
 
-    // Konfigurasi API Gimita
     const BASE_URL = "https://api.gimita.id/api/downloader";
     const HEADERS = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -18,7 +17,7 @@ async function fetchYouTubeData(url) {
                 timeout: 20000 
             }),
             axios.get(`${BASE_URL}/ytmp3`, { 
-                params: { url: url, quality: 4 }, // Quality 4 = 192kbps
+                params: { url: url, quality: 4 },
                 headers: HEADERS,
                 timeout: 20000 
             })
@@ -35,7 +34,6 @@ async function fetchYouTubeData(url) {
             if (res.success && res.data) {
                 const vData = res.data;
                 
-                // Update Info Metadata dari Video Response
                 if (vData.title) title = vData.title;
                 if (vData.thumbnail) thumbnail = vData.thumbnail;
                 
@@ -43,13 +41,11 @@ async function fetchYouTubeData(url) {
                     medias.push({
                         url: vData.download_url,
                         type: 'video',
-                        label: `DOWNLOAD VIDEO (${vData.resolution || '720p'})`,
+                        label: `DOWNLOAD VIDEO (${vData.quality || '720p'})`,
                         extension: 'mp4'
                     });
                 }
             }
-        } else {
-            console.error("[YT] Video Fetch Error:", videoRes.reason?.message);
         }
 
         // --- 2. PROSES AUDIO ---
@@ -58,7 +54,6 @@ async function fetchYouTubeData(url) {
             if (res.success && res.data) {
                 const aData = res.data;
                 
-                // Fallback metadata jika gagal dapat dari video
                 if (title === "YouTube Video" && aData.title) title = aData.title;
                 if (thumbnail.includes("Youtube_logo") && aData.thumbnail) thumbnail = aData.thumbnail;
 
@@ -66,18 +61,16 @@ async function fetchYouTubeData(url) {
                     medias.push({
                         url: aData.download_url,
                         type: 'audio',
-                        label: 'DOWNLOAD MP3 (192kbps)',
+                        label: 'DOWNLOAD MP3',
                         extension: 'mp3'
                     });
                 }
             }
-        } else {
-            console.error("[YT] Audio Fetch Error:", audioRes.reason?.message);
         }
 
-        // --- CHECK RESULT ---
         if (medias.length === 0) {
-            throw new Error("Gagal mendapatkan link download dari server utama.");
+            // Jika Gimita gagal, kita bisa kasih pesan yang lebih informatif atau lempar error
+            throw new Error("Gagal mendapatkan link download. API Gimita mungkin sedang limit.");
         }
 
         return {
@@ -89,7 +82,7 @@ async function fetchYouTubeData(url) {
 
     } catch (error) {
         console.error("[YT Service Error]:", error.message);
-        throw new Error("Server sedang sibuk atau URL tidak valid.");
+        throw new Error(error.message || "Gagal mengambil data YouTube.");
     }
 }
 
