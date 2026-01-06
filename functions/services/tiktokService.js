@@ -1,5 +1,5 @@
 import axios from "axios";
-import cheerio from "cheerio";
+import * as cheerio from "cheerio";
 
 async function fetchTikTokData(videoUrl) {
   const endpoint = "https://tikdownloader.io/api/ajaxSearch";
